@@ -231,32 +231,46 @@
     say(state.phase==='focus' ? 'いってらっしゃい、集中タイム！' : 'リラックス〜深呼吸🫧');
     saveSettings();
   }
+  // 走行中のtickを静かに止める（バブル文言は変えない）
+function stopTick() {
+  if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
+  state.running = false;
+  app.classList.remove('running');
+}
   function pause(){
-    if(!state.running) return;
-    clearInterval(state.timerId);
-    state.timerId = null;
-    state.running = false;
-    app.classList.remove('running');
-    say('一時停止〜 整えて再開しよ！');
-  }
-  function reset(){
-    pause();
-    state.setIndex = 1;
-    setPhase('focus');
-  }
-  function skip(){ onPhaseComplete(true); }
+  if(!state.running) return;
+  stopTick();
+  say('一時停止〜 整えて再開しよ！');
+}
+
+ function reset(){
+  stopTick();
+  state.setIndex = 1;
+  setPhase('focus');
+}
 
   function onPhaseComplete(force=false){
-    if(state.phase==='focus'){
-      const setsToLong = +$('setsToLong').value || 4;
-      const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
-      state.setIndex += 1;
-      setPhase(next);
-    }else{
-      setPhase('focus');
-    }
-    if(state.running || force){ start(); } else { $('display').textContent = fmt(state.remaining); }
+  const wasRunning = state.running; // 直前に走っていたか記憶
+  stopTick();                       // ★古いtargetTsで回り続けるのを必ず止める
+
+  // 次フェーズへ
+  if(state.phase==='focus'){
+    const setsToLong = +$('setsToLong').value || 4;
+    const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
+    state.setIndex += 1;
+    setPhase(next);
+  }else{
+    setPhase('focus');
   }
+
+  // 直前に走っていた or 「→次へ」なら自動再スタート
+  if (wasRunning || force) {
+    start();
+  } else {
+    $('display').textContent = fmt(state.remaining);
+  }
+}
+
 
   // ========== 入出力 ==========
   function saveSettings(){
