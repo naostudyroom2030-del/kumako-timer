@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#69c3a1">
+
+<!-- iOS向け（Safari用） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+
+<title>学習用ポモドーロタイマー v1.4 nao</title>
+<style>
+  /* 🌿 基本テーマ */
+  :root { --bg:#0b1220; --card:#111a2b; --text:#e8eefc; --muted:#9ab0d1; --accent:#7aa2ff; --good:#48d597; --warn:#ffb454; --bad:#ff6b6b; }
+  body { margin:0; background:linear-gradient(180deg,#0b1220,#0c1323 30%,#0a0f1a); color:var(--text);
+         font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; }
+  .wrap{ max-width:840px; margin:32px auto; padding:16px; }
+  .card{ background:var(--card); border:1px solid #1b2740; border-radius:24px; padding:20px; }
+  h1{ font-size:20px; margin:0 0 12px; letter-spacing:.03em; display:flex; align-items:center; gap:8px; }
+  .phase-badge{ border:1px solid #2a3a66; color:#bcd0ff; background:transparent; border-radius:999px; padding:4px 8px; font-size:13px; }
+  .pill{ border:1px solid #223356; color:#cbd7ff; background:transparent; border-radius:999px; padding:4px 8px; font-size:11px; }
+  .display{ font-variant-numeric:tabular-nums; font-size: clamp(48px, 9vw, 96px); text-align:center;
+            border:1px solid #1d2b4a; border-radius:24px; padding:10px 16px; background:#0b1326; }
+  .muted{ color:var(--muted); }
+  .row{ display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
+  .field{ background:#0b1326; border:1px solid #1d2b4a; border-radius:12px; padding:10px; }
+  .field label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
+  .field input{ width:100%; background:#091223; color:var(--text); border:1px solid #223356; border-radius:10px; padding:8px; }
+  .controls{ margin-top:12px; }
+  button{ border-radius:14px; padding:10px 16px; margin:4px; cursor:pointer; font-size:14px; transition:.15s; border:1px solid #21345d; background:#142040; color:var(--text); }
+  button:hover{ filter:brightness(1.06); }
+  .ghost{ background:transparent }
+  .success{ background:var(--good); color:#062819; border-color:#2b8c68 }
+  .warn{ background:#ffe9c4; color:#4a3612; border-color:#e9c07a }
+
+  /* 🍃 Minty Focus テーマ */
+  body[data-theme="mint"]{
+    --bg:#f6fff9; --card:#ffffff; --text:#2f3e37; --muted:#6b8c7c; --accent:#69c3a1; --good:#69c3a1;
+    background:linear-gradient(180deg,#f6fff9,#ffffff 60%,#ffffff);
+  }
+  body[data-theme="mint"] .card{ border-color:#e6f6ee; box-shadow:0 16px 32px rgba(105,195,161,.08); }
+  body[data-theme="mint"] .display{ background:#f9fffb; border-color:#e6f6ee; color:#24342d; }
+  body[data-theme="mint"] .phase-badge{ border-color:#bfead6; color:#2f3e37; background:#eefaf4; }
+  body[data-theme="mint"] .pill{ border-color:#d6f0e1; color:#2f3e37; background:#f6fff9; }
+  body[data-theme="mint"] .field{ background:#fff; border-color:#d6f0e1; }
+  body[data-theme="mint"] .field input{ background:#fff; border-color:#d6f0e1; color:#2f3e37; }
+  body[data-theme="mint"] button{ background:#a6e6c3; border-color:#69c3a1; color:#24342d;
+    box-shadow:0 2px 0 #69c3a1, 0 6px 18px rgba(105,195,161,.18); }
+  body[data-theme="mint"] button:hover{ filter:brightness(1.03); box-shadow:0 3px 0 #69c3a1, 0 10px 22px rgba(105,195,161,.22); }
+  body[data-theme="mint"] .muted{ color:#567a6a; }
+
+  /* 🧸 くまこ＋吹き出し（タイマー下） */
+  .mascot { display:flex; flex-direction:column; align-items:center; gap:8px; margin:12px 0 8px; }
+  #kumako { width:110px; height:auto; opacity:.98; pointer-events:none; }
+  .running #kumako { animation:bob 2s ease-in-out infinite; transform-origin:50% 100%; }
+  @keyframes bob { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-4px) } }
+  .bubble { position:relative; max-width:520px; padding:10px 14px; border-radius:14px; background:#eefaf4; border:1px solid #d6f0e1; color:#2f3e37; font-size:14px;
+            box-shadow:0 4px 14px rgba(105,195,161,.12); }
+  .bubble::after{ content:""; position:absolute; top:-8px; left:calc(50% - 8px);
+                  border-width:0 8px 8px 8px; border-style:solid; border-color:transparent transparent #d6f0e1 transparent; }
+  .bubble::before{ content:""; position:absolute; top:-7px; left:calc(50% - 7px);
+                   border-width:0 7px 7px 7px; border-style:solid; border-color:transparent transparent #eefaf4 transparent; }
+
+  /* 進捗バー */
+  #bar{height:8px;border-radius:8px;background:#e6f6ee;overflow:hidden;margin:6px 2px 0}
+  #barFill{height:100%;width:0%;background:#69c3a1;transition:width .2s ease}
+
+  /* 休憩バッジの色 */
+  .breaking .phase-badge{ background:#fff8ec; border-color:#ffd9a8; color:#573d17; }
+
+  .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
+</style>
+</head>
+<body data-theme="mint">
+<div class="wrap">
+  <div class="card" id="app">
+    <h1>
+      学習用ポモドーロタイマー
+      <span class="phase-badge" id="phaseBadge">フォーカス</span>
+      <span class="pill">v1.4 nao</span>
+    </h1>
+
+    <!-- タイマー表示 -->
+    <div class="display" id="display">40:00</div>
+    <!-- 進捗バー（タイマー直下） -->
+    <div id="bar"><div id="barFill"></div></div>
+
+    <!-- くまこ＋吹き出し（タイマーの下に中央） -->
+    <div class="mascot">
+      <img id="kumako" src="kumako.png" alt="くまこ">
+      <div class="bubble" id="bubble">準備OK？ 最初からいこう！</div>
+    </div>
+
+    <!-- 操作 -->
+    <div class="controls">
+      <button id="startBtn">スタート</button>
+      <button id="pauseBtn">一時停止</button>
+      <button id="resetBtn">リセット</button>
+      <button id="skipBtn" class="ghost">→ 次へ</button>
+    </div>
+
+    <!-- 設定（ナオ仕様が初期値） -->
+    <div class="row" style="margin-top:12px">
+      <div class="field">
+        <label>集中（分）</label>
+        <input type="number" id="focusMin" min="1" value="40">
+      </div>
+      <div class="field">
+        <label>短休憩（分）</label>
+        <input type="number" id="shortMin" min="1" value="10">
+      </div>
+      <div class="field">
+        <label>長休憩（分）</label>
+        <input type="number" id="longMin" min="1" value="20">
+      </div>
+      <div class="field">
+        <label>長休憩までのセット数</label>
+        <input type="number" id="setsToLong" min="2" value="4">
+      </div>
+    </div>
+
+    <!-- テーマ切替 -->
+    <div style="margin-top:12px" class="field">
+      <label>テーマ</label>
+      <select id="themeSelect">
+        <option value="mint">ミント（爽やか）</option>
+        <option value="dark">夜空（ダーク）</option>
+      </select>
+    </div>
+
+    <p class="muted" style="font-size:12px;margin-top:12px">設定は自動保存されます。タブを閉じても続きます（簡易）。</p>
+  </div>
+</div>
+
+<script>
+  // ========== 状態 ==========
+  const $ = id => document.getElementById(id);
+  const app = $('app');
+  const state = {
+    phase: 'focus',           // 'focus' | 'short' | 'long'
+    remaining: 40*60,         // 秒
+    startTotal: 40*60,        // フェーズ総秒数（バー用）
+    targetTs: null,           // 目標時刻(ms)
+    timerId: null,
+    setIndex: 1,              // 何セット目の終了か（focus完了で+1）
+    running: false,
+    fiveMinFlag: false        // 残り5分メッセージ一度だけ
+  };
+
+  // ========== ユーティリティ ==========
+  const fmt = s => {
+    s = Math.max(0, Math.floor(s));
+    const m = Math.floor(s/60), ss = s%60;
+    return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  };
+  const say = (t)=> $('bubble').textContent = t;
+
+  // ========== テーマ保存 ==========
+  (function themeInit(){
+    try{
+      const key='pomodoro_v2';
+      const saved=JSON.parse(localStorage.getItem(key)||'{}');
+      const initial = saved.theme || 'mint';
+      document.body.setAttribute('data-theme', initial);
+      const sel=$('themeSelect');
+      if(sel){
+        sel.value=initial;
+        sel.addEventListener('change', ()=>{
+          const v=sel.value;
+          document.body.setAttribute('data-theme', v);
+          const cur=JSON.parse(localStorage.getItem(key)||'{}');
+          cur.theme=v; localStorage.setItem(key, JSON.stringify(cur));
+        });
+      }
+    }catch(e){}
+  })();
+
+  // ========== フェーズ切替 ==========
+  function minutesFor(phase){
+    if(phase==='focus') return +$('focusMin').value || 40;
+    if(phase==='short') return +$('shortMin').value || 10;
+    return +$('longMin').value || 20;
+  }
+  function labelFor(phase){
+    return phase==='focus' ? 'フォーカス' : (phase==='short'?'短休憩':'長休憩');
+  }
+  function setPhase(phase){
+    state.phase = phase;
+    state.remaining = minutesFor(phase)*60;
+    state.startTotal = state.remaining;           // バー初期化
+    state.fiveMinFlag = false;
+    $('display').textContent = fmt(state.remaining);
+    $('phaseBadge').textContent = labelFor(phase);
+    $('barFill').style.width = '0%';
+    app.classList.toggle('breaking', phase!=='focus');
+    if(phase==='focus') say('準備OK？ 集中モードいってみよう！');
+    if(phase==='short') say('お水のもう〜 ちょっと休憩☕');
+    if(phase==='long')  say('よくがんばったね！ しっかり長めに休もう😊');
+  }
+
+  // ========== タイマー操作 ==========
+  function updateBar(){
+    if(state.startTotal>0){
+      const p = 100 * (1 - state.remaining / state.startTotal);
+      $('barFill').style.width = Math.min(100, Math.max(0, p)) + '%';
+    }
+  }
+  function tick(){
+    const now = Date.now();
+    state.remaining = Math.ceil((state.targetTs - now)/1000);
+    $('display').textContent = fmt(state.remaining);
+    updateBar();
+
+    if(state.phase==='focus' && !state.fiveMinFlag && state.remaining === 5*60){
+      say('あと5分！ そのまま駆け抜けよう🔥'); state.fiveMinFlag = true;
+    }
+    if(state.remaining <= 0){
+      onPhaseComplete();
+    }
+  }
+  function start(){
+    if(state.running) return;
+    state.targetTs = Date.now() + state.remaining*1000;
+    state.timerId = setInterval(tick, 200);
+    state.running = true;
+    app.classList.add('running');
+    say(state.phase==='focus' ? 'いってらっしゃい、集中タイム！' : 'リラックス〜深呼吸🫧');
+    saveSettings();
+  }
+  function pause(){
+    if(!state.running) return;
+    clearInterval(state.timerId);
+    state.timerId = null;
+    state.running = false;
+    app.classList.remove('running');
+    say('一時停止〜 整えて再開しよ！');
+  }
+  function reset(){
+    pause();
+    state.setIndex = 1;
+    setPhase('focus');
+  }
+  function skip(){ onPhaseComplete(true); }
+
+  function onPhaseComplete(force=false){
+    if(state.phase==='focus'){
+      const setsToLong = +$('setsToLong').value || 4;
+      const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
+      state.setIndex += 1;
+      setPhase(next);
+    }else{
+      setPhase('focus');
+    }
+    if(state.running || force){ start(); } else { $('display').textContent = fmt(state.remaining); }
+  }
+
+  // ========== 入出力 ==========
+  function saveSettings(){
+    try{
+      const key='pomodoro_v2';
+      const cur=JSON.parse(localStorage.getItem(key)||'{}');
+      cur.focusMin=+$('focusMin').value; cur.shortMin=+$('shortMin').value;
+      cur.longMin=+$('longMin').value;   cur.setsToLong=+$('setsToLong').value;
+      localStorage.setItem(key, JSON.stringify(cur));
+    }catch(e){}
+  }
+  (function restoreSettings(){
+    try{
+      const s=JSON.parse(localStorage.getItem('pomodoro_v2')||'{}');
+      if(s.focusMin) $('focusMin').value = s.focusMin;
+      if(s.shortMin) $('shortMin').value = s.shortMin;
+      if(s.longMin)  $('longMin').value  = s.longMin;
+      if(s.setsToLong) $('setsToLong').value = s.setsToLong;
+    }catch(e){}
+  })();
+
+  // ========== イベント ==========
+  $('startBtn').addEventListener('click', start);
+  $('pauseBtn').addEventListener('click', pause);
+  $('resetBtn').addEventListener('click', reset);
+  $('skipBtn').addEventListener('click', skip);
+  ['focusMin','shortMin','longMin','setsToLong'].forEach(id=>{
+    $(id).addEventListener('change', ()=>{
+      saveSettings();
+      if(!state.running){
+        state.remaining = minutesFor(state.phase)*60;
+        state.startTotal = state.remaining; $('barFill').style.width='0%';
+        $('display').textContent = fmt(state.remaining);
+      }
+    });
+  });
+  window.addEventListener('keydown', (e)=>{
+    if(e.code==='Space'){ e.preventDefault(); state.running? pause(): start(); }
+    if(e.key==='r' || e.key==='R'){ reset(); }
+    if(e.key==='ArrowRight'){ skip(); }
+  });
+
+  // 初期化
+  setPhase('focus'); // ナオ仕様（40分）で表示
+</script>
+
+<div class="footer">Pomodoro <strong>v1.4 nao (silent)</strong></div>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
+  }
+</script>
+</body>
+</html>
