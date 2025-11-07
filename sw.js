@@ -1,5 +1,5 @@
 // sw.js — くまこPWA
-const CACHE = 'kumako-pwa-v1';
+const CACHE = 'kumako-pwa-v2';
 const ASSETS = [
   './',
   './index.html',
