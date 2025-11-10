@@ -12,7 +12,11 @@
 <meta name="apple-mobile-web-app-title" content="Kumako">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 
+<!-- Favicon -->
+<link rel="icon" type="image/png" href="favicon.png">
+
 <title>学習用ポモドーロタイマー v1.5 ring</title>
+
 <style>
   /* 🌿 基本テーマ */
   :root { --bg:#0b1220; --card:#111a2b; --text:#e8eefc; --muted:#9ab0d1; --accent:#7aa2ff; --good:#48d597; --warn:#ffb454; --bad:#ff6b6b; }
@@ -517,11 +521,17 @@ function buzz() {
 // ======= 視覚アニメ =======
 function celebrateOnce() {
   const center = document.querySelector('.timer-center');
-  const ring   = $('ringFg');
-  const kuma   = $('kumako');
-  if (ring)   { ring.classList.add('pop');   setTimeout(()=>ring.classList.remove('pop'), 700); }
-  if (center) { center.classList.add('pulse'); setTimeout(()=>center.classList.remove('pulse'), 600); }
-  if (kuma)   { kuma.classList.add('cele');  setTimeout(()=>kuma.classList.remove('cele'), 600); }
+  const ring   = document.getElementById('ringFg');
+  const kuma   = document.getElementById('kumako');
+
+  if (ring)   { ring.classList.add('pop');   setTimeout(()=>ring.classList.remove('pop'), 750); }
+  if (center) { center.classList.add('pulse'); setTimeout(()=>center.classList.remove('pulse'), 650); }
+
+  // ★ ゆらゆら(bob)と競合しないよう、ポップ中は必ずceleを優先
+  if (kuma)   { 
+    kuma.classList.add('cele'); 
+    setTimeout(()=>kuma.classList.remove('cele'), 650);
+  }
 }
 
 </script>
