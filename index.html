@@ -73,6 +73,34 @@
   .breaking .phase-badge{ background:#fff8ec; border-color:#ffd9a8; color:#573d17; }
 
   .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
+  /* 円形タイマー */
+.timer-wrap{
+  width:min(56vw,320px); height:min(56vw,320px);
+  margin:12px auto 6px; position:relative;
+}
+.ring{ width:100%; height:100%; transform:rotate(-90deg); }
+.ring-bg{ fill:none; stroke:#e6f6ee; stroke-width:10; opacity:.7; }
+.ring-fg{ fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round; stroke-dasharray: 339.292; stroke-dashoffset: 339.292; transition: stroke-dashoffset .2s ease; }
+.timer-center{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.timer-center .time{ font-variant-numeric:tabular-nums; font-size: clamp(40px, 8vw, 72px); font-weight:600; color:var(--text); }
+.timer-center .phase{ font-size:12px; color:var(--muted); margin-top:4px; }
+
+/* 切替トグルの並び */
+.mode-toggle{ font-size:12px; display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+
+/* ダーク時の背景円を少し濃く */
+body:not([data-theme="mint"]) .ring-bg{ stroke:#1d2b4a; opacity:.9; }
+
+/* 休憩中は色をウォームに */
+.breaking .ring-fg{ stroke: var(--warn); }
+
+/* 視覚効果をひかえめにしたい人向け */
+@media (prefers-reduced-motion: reduce){
+  .ring-fg{ transition:none }
+}
+
 </style>
 </head>
 <body data-theme="mint">
@@ -84,8 +112,25 @@
       <span class="pill">v1.4.2 nao</span>
     </h1>
 
-    <!-- タイマー表示 -->
-    <div class="display" id="display">40:00</div>
+    <!-- タイマー表示（円形リング） -->
+<div class="timer-wrap">
+  <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+    <!-- 背景円 -->
+    <circle class="ring-bg" cx="60" cy="60" r="54" />
+    <!-- 進捗円（strokeDashoffset をJSで更新） -->
+    <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="54" />
+  </svg>
+  <div class="timer-center">
+    <div class="time" id="display">40:00</div>
+    <div class="phase" id="phaseMini">フォーカス</div>
+  </div>
+</div>
+
+<!-- 表示モード（任意：円形/バー切替） -->
+<label class="muted mode-toggle">
+  <input type="checkbox" id="useCircular" checked>
+  円形プログレスを使う
+</label>
     <!-- 進捗バー（タイマー直下） -->
     <div id="bar"><div id="barFill"></div></div>
 
@@ -143,6 +188,12 @@
 </div>
 
 <script>
+ // 円形リング進捗用
+const R = 54;
+const CIRC = 2 * Math.PI * R; // 339.292...
+const ringEl = document.getElementById('ringFg');
+const phaseMini = document.getElementById('phaseMini');
+
   // ========== 状態 ==========
   const $ = id => document.getElementById(id);
   const app = $('app');
@@ -206,15 +257,29 @@
     if(phase==='focus') say('準備OK？ 集中モードいってみよう！');
     if(phase==='short') say('お水のもう〜 ちょっと休憩☕');
     if(phase==='long')  say('よくがんばったね！ しっかり長めに休もう😊');
+      if (phaseMini) phaseMini.textContent = labelFor(phase);
+      const colorBy = {
+  focus: 'var(--accent)',
+  short: 'var(--warn)',
+  long:  'var(--good)'
+};
+if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
+
+      
+  // 円形をリセット（0%から）
+  if (ringEl) ringEl.style.strokeDashoffset = String(CIRC);
+
   }
 
   // ========== タイマー操作 ==========
   function updateBar(){
-    if(state.startTotal>0){
-      const p = 100 * (1 - state.remaining / state.startTotal);
-      $('barFill').style.width = Math.min(100, Math.max(0, p)) + '%';
-    }
+  if(state.startTotal > 0 && ringEl){
+    const progress = 1 - (state.remaining / state.startTotal); // 0→1
+    const clamped = Math.min(1, Math.max(0, progress));
+    ringEl.style.strokeDashoffset = String(CIRC * (1 - clamped));
   }
+}
+
   function tick(){
     const now = Date.now();
     state.remaining = Math.ceil((state.targetTs - now)/1000);
@@ -290,6 +355,7 @@
       cur.focusMin=+$('focusMin').value; cur.shortMin=+$('shortMin').value;
       cur.longMin=+$('longMin').value;   cur.setsToLong=+$('setsToLong').value;
       cur.autoNext = !!$('autoContinue')?.checked; // ★ 追加保存
+      cur.useCircular = !!document.getElementById('useCircular')?.checked;
       localStorage.setItem(key, JSON.stringify(cur));
     }catch(e){}
   }
@@ -302,6 +368,7 @@
       if(s.setsToLong) $('setsToLong').value = s.setsToLong;
       if('autoNext' in s && $('autoContinue')) $('autoContinue').checked = !!s.autoNext; // ★ 復元
     }catch(e){}
+    if('useCircular' in s && $('useCircular')) $('useCircular').checked = !!s.useCircular;
   })();
 
   // ========== イベント ==========
@@ -309,6 +376,7 @@
   $('pauseBtn').addEventListener('click', pause);
   $('resetBtn').addEventListener('click', reset);
   $('skipBtn').addEventListener('click', skip);
+  $('useCircular')?.addEventListener('change', saveSettings);
   $('autoContinue')?.addEventListener('change', saveSettings);
   ['focusMin','shortMin','longMin','setsToLong'].forEach(id=>{
     $(id).addEventListener('change', ()=>{
