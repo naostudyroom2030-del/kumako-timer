@@ -83,19 +83,32 @@
   @media (prefers-reduced-motion: reduce){ .ring-fg{ transition:none } }
 
   .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
-  /* 終了アニメ */
-@keyframes ringPop { 0%{ stroke-width:10; filter:none; }
-  45%{ stroke-width:14; filter:drop-shadow(0 0 10px rgba(105,195,161,.35)); }
-  100%{ stroke-width:10; filter:none; } }
-@keyframes centerPulse { 0%{ transform:scale(1); opacity:1; }
+ /* === 終了アニメ === */
+@keyframes ringPop {
+  0% { stroke-width:10; filter:none; }
+  45% { stroke-width:14; filter:drop-shadow(0 0 10px rgba(105,195,161,.35)); }
+  100% { stroke-width:10; filter:none; }
+}
+@keyframes centerPulse {
+  0%{ transform:scale(1); opacity:1; }
   50%{ transform:scale(1.06); opacity:1; }
-  100%{ transform:scale(1); opacity:1; } }
-@keyframes kumaBounce { 0%,100%{ transform:translateY(0) }
-  40%{ transform:translateY(-6px) } }
+  100%{ transform:scale(1); opacity:1; }
+}
+@keyframes kumaBounce {
+  0%,100%{ transform:translateY(0) }
+  40%{ transform:translateY(-6px) }
+}
 
-.ring-fg.pop   { animation: ringPop .7s ease-out 1; }
+/* ★ 衝突回避：ゆらゆらよりポップを優先 */
+#kumako.cele { animation: kumaBounce .6s ease-out 1 !important; }
+.ring-fg.pop { animation: ringPop .7s ease-out 1; }
 .timer-center.pulse { animation: centerPulse .6s ease-out 1; }
-#kumako.cele   { animation: kumaBounce .6s ease-out 1; }
+
+/* Safari対策：SVGのfilter効かない環境向けフォールバック */
+@supports not (filter: drop-shadow(0 0 10px #000)) {
+  .ring-fg.pop { filter:none; }
+}
+
 
 </style>
 </head>
