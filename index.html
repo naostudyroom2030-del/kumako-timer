@@ -466,24 +466,27 @@ function cuteTone({freq, t, dur, warm=false}) {
   playNote({freq: freq*1.999, t, dur: dur*0.85, type: 'sine', gain: 0.07, bend: 0.006, lpStart: 12000, lpEnd: 9000});
 }
 
-// くまこチャイム本体（パターン2種）
+// くまこチャイム本体（F1スタート風＋上昇チャイム）
 function kumakoChime(kind){ // 'toBreak'（集中→休憩） / 'toFocus'（休憩→集中）
   if (!$('soundOn')?.checked) return;
   ensureAudio(); if (!audioCtx) return;
 
-  // 音階はA=440基準。かわいめにメジャー系。
-  const A4=440, B4=494, C5=523.25, E5=659.25, G5=783.99, A5=880;
+  // 音階設定
+  const A4=440, B4=494, C5=523.25, D5=587.33, E5=659.25, G5=783.99, A5=880;
 
-  if (kind === 'toBreak') {
-    // 高-中-高 の“ごほうび”アルペジオ（上向き）
-    cuteTone({freq: A5, t: 0.00, dur: .16});
-    cuteTone({freq: E5, t: 0.18, dur: .16});
-    cuteTone({freq: G5, t: 0.34, dur: .22});
+  if (kind === 'toFocus') {
+    // 💥 F1エントリー風：低→中→高、うねる感じで気合！
+    cuteTone({freq: A4, t: 0.00, dur: .22, warm:true});     // 低く構える
+    cuteTone({freq: D5, t: 0.18, dur: .22, warm:false});    // エンジン上がる
+    cuteTone({freq: G5, t: 0.36, dur: .30, warm:false});    // スタート！🏎️💨
   } else {
-    // やさしい単音で「戻るよ」合図（少し温かいトーン）
-    cuteTone({freq: B4, t: 0.00, dur: .24, warm:true});
+    // ✨ 上昇チャイム：やわらかく高音へ抜けていく
+    cuteTone({freq: E5, t: 0.00, dur: .18});
+    cuteTone({freq: G5, t: 0.18, dur: .20});
+    cuteTone({freq: A5, t: 0.36, dur: .25});
   }
 }
+
 
 // 旧 playChime をこの関数に置換
 function playChime(kind){
