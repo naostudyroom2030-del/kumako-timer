@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Kumako">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 
-<title>学習用ポモドーロタイマー v1.4 nao</title>
+<title>学習用ポモドーロタイマー v1.4.2 nao</title>
 <style>
   /* 🌿 基本テーマ */
   :root { --bg:#0b1220; --card:#111a2b; --text:#e8eefc; --muted:#9ab0d1; --accent:#7aa2ff; --good:#48d597; --warn:#ffb454; --bad:#ff6b6b; }
@@ -30,7 +30,7 @@
   .field{ background:#0b1326; border:1px solid #1d2b4a; border-radius:12px; padding:10px; }
   .field label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
   .field input{ width:100%; background:#091223; color:var(--text); border:1px solid #223356; border-radius:10px; padding:8px; }
-  .controls{ margin-top:12px; }
+  .controls{ margin-top:12px; position:relative; z-index:2; }
   button{ border-radius:14px; padding:10px 16px; margin:4px; cursor:pointer; font-size:14px; transition:.15s; border:1px solid #21345d; background:#142040; color:var(--text); }
   button:hover{ filter:brightness(1.06); }
   .ghost{ background:transparent }
@@ -54,7 +54,7 @@
   body[data-theme="mint"] .muted{ color:#567a6a; }
 
   /* 🧸 くまこ＋吹き出し（タイマー下） */
-  .mascot { display:flex; flex-direction:column; align-items:center; gap:8px; margin:12px 0 8px; }
+  .mascot { display:flex; flex-direction:column; align-items:center; gap:8px; margin:12px 0 8px; position:relative; z-index:1; }
   #kumako { width:110px; height:auto; opacity:.98; pointer-events:none; }
   .running #kumako { animation:bob 2s ease-in-out infinite; transform-origin:50% 100%; }
   @keyframes bob { 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-4px) } }
@@ -81,7 +81,7 @@
     <h1>
       学習用ポモドーロタイマー
       <span class="phase-badge" id="phaseBadge">フォーカス</span>
-      <span class="pill">v1.4 nao</span>
+      <span class="pill">v1.4.2 nao</span>
     </h1>
 
     <!-- タイマー表示 -->
@@ -97,11 +97,17 @@
 
     <!-- 操作 -->
     <div class="controls">
-      <button id="startBtn">スタート</button>
-      <button id="pauseBtn">一時停止</button>
-      <button id="resetBtn">リセット</button>
-      <button id="skipBtn" class="ghost">→ 次へ</button>
+      <button id="startBtn" type="button">スタート</button>
+      <button id="pauseBtn" type="button">一時停止</button>
+      <button id="resetBtn" type="button">リセット</button>
+      <button id="skipBtn" type="button" class="ghost">→ 次へ</button>
     </div>
+
+    <!-- 自動進行トグル（デフォルトOFF） -->
+    <label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:6px;margin-left:8px">
+      <input type="checkbox" id="autoContinue">
+      フェーズ切替後に自動スタートする
+    </label>
 
     <!-- 設定（ナオ仕様が初期値） -->
     <div class="row" style="margin-top:12px">
@@ -220,6 +226,7 @@
     }
     if(state.remaining <= 0){
       onPhaseComplete();
+      return; // ★ 古いtickを終了
     }
   }
   function start(){
@@ -232,45 +239,48 @@
     saveSettings();
   }
   // 走行中のtickを静かに止める（バブル文言は変えない）
-function stopTick() {
-  if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
-  state.running = false;
-  app.classList.remove('running');
-}
+  function stopTick() {
+    if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
+    state.running = false;
+    app.classList.remove('running');
+  }
   function pause(){
-  if(!state.running) return;
-  stopTick();
-  say('一時停止〜 整えて再開しよ！');
-}
-
- function reset(){
-  stopTick();
-  state.setIndex = 1;
-  setPhase('focus');
-}
-
-  function onPhaseComplete(force=false){
-  const wasRunning = state.running; // 直前に走っていたか記憶
-  stopTick();                       // ★古いtargetTsで回り続けるのを必ず止める
-
-  // 次フェーズへ
-  if(state.phase==='focus'){
-    const setsToLong = +$('setsToLong').value || 4;
-    const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
-    state.setIndex += 1;
-    setPhase(next);
-  }else{
+    if(!state.running) return;
+    stopTick();
+    say('一時停止〜 整えて再開しよ！');
+  }
+  function reset(){
+    stopTick();
+    state.setIndex = 1;
     setPhase('focus');
   }
 
-  // 直前に走っていた or 「→次へ」なら自動再スタート
-  if (wasRunning || force) {
-    start();
-  } else {
-    $('display').textContent = fmt(state.remaining);
-  }
-}
+  function onPhaseComplete(force=false){
+    const wasRunning = state.running; // 直前に走っていたか記憶
+    stopTick();                       // ★古いtargetTsを必ず停止
 
+    // 次フェーズへ
+    if(state.phase==='focus'){
+      const setsToLong = +$('setsToLong').value || 4;
+      const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
+      state.setIndex += 1;
+      setPhase(next);
+    }else{
+      setPhase('focus');
+    }
+
+    // 自動進行の判断（デフォルトOFF）
+    const auto = $('autoContinue')?.checked ?? false;
+    if (force || (wasRunning && auto)) {
+      start();
+    } else {
+      $('display').textContent = fmt(state.remaining);
+      say('次のフェーズの準備ができたら、スタートしてね🧸');
+    }
+  }
+
+  // どのフェーズでも必ず即次へ（force=true）
+  function skip(){ onPhaseComplete(true); }
 
   // ========== 入出力 ==========
   function saveSettings(){
@@ -279,6 +289,7 @@ function stopTick() {
       const cur=JSON.parse(localStorage.getItem(key)||'{}');
       cur.focusMin=+$('focusMin').value; cur.shortMin=+$('shortMin').value;
       cur.longMin=+$('longMin').value;   cur.setsToLong=+$('setsToLong').value;
+      cur.autoNext = !!$('autoContinue')?.checked; // ★ 追加保存
       localStorage.setItem(key, JSON.stringify(cur));
     }catch(e){}
   }
@@ -289,6 +300,7 @@ function stopTick() {
       if(s.shortMin) $('shortMin').value = s.shortMin;
       if(s.longMin)  $('longMin').value  = s.longMin;
       if(s.setsToLong) $('setsToLong').value = s.setsToLong;
+      if('autoNext' in s && $('autoContinue')) $('autoContinue').checked = !!s.autoNext; // ★ 復元
     }catch(e){}
   })();
 
@@ -297,6 +309,7 @@ function stopTick() {
   $('pauseBtn').addEventListener('click', pause);
   $('resetBtn').addEventListener('click', reset);
   $('skipBtn').addEventListener('click', skip);
+  $('autoContinue')?.addEventListener('change', saveSettings);
   ['focusMin','shortMin','longMin','setsToLong'].forEach(id=>{
     $(id).addEventListener('change', ()=>{
       saveSettings();
@@ -317,7 +330,7 @@ function stopTick() {
   setPhase('focus'); // ナオ仕様（40分）で表示
 </script>
 
-<div class="footer">Pomodoro <strong>v1.4 nao (silent)</strong></div>
+<div class="footer">Pomodoro <strong>v1.4.2 nao (manual default)</strong></div>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
