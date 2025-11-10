@@ -277,15 +277,13 @@
     if (ts) ts.textContent = String(rec.sets);
   }
 
-  // 現在フォーカス走行中の経過を日次に加算してリセット
-  function flushFocusProgress(){
-    if (state.phase !== 'focus') { state.focusStartTs = null; return; }
-    if (!state.focusStartTs) return;
-    const now = Date.now();
-    const sec = Math.max(0, Math.floor((now - state.focusStartTs)/1000));
-    if (sec > 0) addFocusSec(sec);
-    state.focusStartTs = now; // 次の区間の起点に更新
-  }
+  // 現在フォーカス走行中の経過を当日合計に反映して、起点はクリア
+function flushFocusProgress() {
+  if (state.phase !== 'focus' || !state.focusStartTs) return;
+  const sec = Math.max(0, Math.floor((Date.now() - state.focusStartTs) / 1000));
+  if (sec) addFocusSec(sec);
+  state.focusStartTs = null;   // ← ここを必ず null に（以前は now にしていた）
+}
 
   // ========== テーマ保存 ==========
   (function themeInit(){
@@ -400,31 +398,20 @@
     renderDaily(); // 念のため再表示
   }
 
-  function onPhaseComplete(force=false){
-    const wasRunning = state.running;
-    stopTick();
+  function onPhaseComplete(force = false){
+  const wasRunning = state.running;
+  stopTick();
 
-    // ★フォーカスを離れる直前までの実測を確定
-    if (state.phase === 'focus') flushFocusProgress();
+  if (state.phase === 'focus') {
+    flushFocusProgress();      // 実績を確定
+    state.focusStartTs = null; // ← フェーズ離脱時は必ずクリア
+  }
 
-    // 次フェーズ決定
-    let nextPhase;
-    if(state.phase==='focus'){
-      const setsToLong = +$('setsToLong').value || 4;
-      nextPhase = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
-      // ★自然完了（force=false）のときだけセット加算
-      if (!force) { state.setIndex += 1; incSet(); }
-      else { state.setIndex += 1; }
-    } else {
-      nextPhase = 'focus';
-    }
-
-    setPhase(nextPhase);
-
-    // ★フォーカスに入った直後に走らせるなら起点セット
-    if (nextPhase === 'focus' && wasRunning) {
-      state.focusStartTs = Date.now();
-    }
+  // …このあと nextPhase を決めて setPhase(nextPhase)
+  // フォーカスに入って自動再開する場合だけ、新たな起点をセット
+  if (nextPhase === 'focus' && wasRunning) {
+    state.focusStartTs = Date.now();
+  }
 
     // チャイム・バイブ・アニメ
     playChime(nextPhase === 'focus' ? 'toFocus' : 'toBreak');
