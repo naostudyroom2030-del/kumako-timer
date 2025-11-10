@@ -83,6 +83,20 @@
   @media (prefers-reduced-motion: reduce){ .ring-fg{ transition:none } }
 
   .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
+  /* 終了アニメ */
+@keyframes ringPop { 0%{ stroke-width:10; filter:none; }
+  45%{ stroke-width:14; filter:drop-shadow(0 0 10px rgba(105,195,161,.35)); }
+  100%{ stroke-width:10; filter:none; } }
+@keyframes centerPulse { 0%{ transform:scale(1); opacity:1; }
+  50%{ transform:scale(1.06); opacity:1; }
+  100%{ transform:scale(1); opacity:1; } }
+@keyframes kumaBounce { 0%,100%{ transform:translateY(0) }
+  40%{ transform:translateY(-6px) } }
+
+.ring-fg.pop   { animation: ringPop .7s ease-out 1; }
+.timer-center.pulse { animation: centerPulse .6s ease-out 1; }
+#kumako.cele   { animation: kumaBounce .6s ease-out 1; }
+
 </style>
 </head>
 <body data-theme="mint">
@@ -125,6 +139,12 @@
       <input type="checkbox" id="autoContinue">
       フェーズ切替後に自動スタートする
     </label>
+    <label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:6px;margin-left:12px">
+  <input type="checkbox" id="soundOn" checked> サウンド
+</label>
+<label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:6px;margin-left:12px">
+  <input type="checkbox" id="vibrateOn"> バイブ
+</label>
 
     <!-- 設定（ナオ仕様が初期値） -->
     <div class="row" style="margin-top:12px">
@@ -263,6 +283,7 @@
     }
   }
   function start(){
+    ensureAudio(); // ←追加：iOSでの初回再生許可
     if(state.running) return;
     state.targetTs = Date.now() + state.remaining*1000;
     state.timerId = setInterval(tick, 200);
@@ -286,27 +307,36 @@
     state.setIndex = 1;
     setPhase('focus');
   }
-  function onPhaseComplete(force=false){
-    const wasRunning = state.running;
-    stopTick();
+function onPhaseComplete(force=false){
+  const wasRunning = state.running;
+  stopTick();
 
-    if(state.phase==='focus'){
-      const setsToLong = +$('setsToLong').value || 4;
-      const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
-      state.setIndex += 1;
-      setPhase(next);
-    }else{
-      setPhase('focus');
-    }
-
-    const auto = $('autoContinue')?.checked ?? false;
-    if (force || (wasRunning && auto)) {
-      start();
-    } else {
-      $('display').textContent = fmt(state.remaining);
-      say('次のフェーズの準備ができたら、スタートしてね🧸');
-    }
+  // 次フェーズ決定
+  let nextPhase;
+  if(state.phase==='focus'){
+    const setsToLong = +$('setsToLong').value || 4;
+    nextPhase = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
+    state.setIndex += 1;
+  } else {
+    nextPhase = 'focus';
   }
+  setPhase(nextPhase);
+
+  // 🔔 フェーズ切替時のサウンド＆アニメ
+  playChime(nextPhase === 'focus' ? 'toFocus' : 'toBreak');
+  buzz();
+  celebrateOnce();
+
+  // 自動スタート判定
+  const auto = $('autoContinue')?.checked ?? false;
+  if (force || (wasRunning && auto)) {
+    start();
+  } else {
+    $('display').textContent = fmt(state.remaining);
+    say('次のフェーズの準備ができたら、スタートしてね🧸');
+  }
+}
+
   function skip(){ onPhaseComplete(true); }
 
   // ========== 入出力 ==========
@@ -317,6 +347,8 @@
       cur.focusMin=+$('focusMin').value; cur.shortMin=+$('shortMin').value;
       cur.longMin=+$('longMin').value;   cur.setsToLong=+$('setsToLong').value;
       cur.autoNext = !!$('autoContinue')?.checked;
+      cur.soundOn   = !!$('soundOn')?.checked;
+      cur.vibrateOn = !!$('vibrateOn')?.checked;
       localStorage.setItem(key, JSON.stringify(cur));
     }catch(e){}
   }
@@ -328,6 +360,8 @@
       if(s.longMin)  $('longMin').value  = s.longMin;
       if(s.setsToLong) $('setsToLong').value = s.setsToLong;
       if('autoNext' in s && $('autoContinue')) $('autoContinue').checked = !!s.autoNext;
+      if('soundOn'   in s && $('soundOn'))   $('soundOn').checked   = !!s.soundOn;
+      if('vibrateOn' in s && $('vibrateOn')) $('vibrateOn').checked = !!s.vibrateOn;
     }catch(e){}
   })();
 
@@ -365,6 +399,115 @@
       navigator.serviceWorker.register('./sw.js').catch(console.error);
     });
   }
+ 
+// ====== くまこシンセ（WebAudio） ======
+let audioCtx = null;
+function ensureAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {}
+}
+
+// 単音を鳴らす小さな関数（ADSR + 簡易フィルタ + ピッチベンド）
+function playNote({freq=440, t=0, dur=0.25, type='sine', gain=0.2, bend=0, lpStart=14000, lpEnd=8000}) {
+  if (!audioCtx) ensureAudio();
+  if (!audioCtx) return;
+
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  const f = audioCtx.createBiquadFilter();
+  o.type = type;
+  o.frequency.value = freq;
+
+  // ピッチベンド（ほんの少しだけ上昇/下降させて“きゅるっ”感）
+  if (bend !== 0) {
+    o.frequency.setValueAtTime(freq, audioCtx.currentTime + t);
+    o.frequency.linearRampToValueAtTime(freq * (1 + bend), audioCtx.currentTime + t + dur * 0.9);
+  }
+
+  // ローパスでやさしい丸み
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(lpStart, audioCtx.currentTime + t);
+  f.frequency.linearRampToValueAtTime(lpEnd, audioCtx.currentTime + t + dur);
+
+  // ADSR（ふわっと出てすっと消える）
+  const a = 0.015, d = 0.06, s = 0.55, r = 0.12;
+  const t0 = audioCtx.currentTime + t;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(gain, t0 + a);
+  g.gain.linearRampToValueAtTime(gain * s, t0 + a + d);
+  g.gain.linearRampToValueAtTime(0.0001, t0 + dur + r);
+
+  // ほんの少しのステレオ幅（左右に薄く散らす）
+  const p = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+  if (p) p.pan.value = (Math.random() * 0.6 - 0.3);
+
+  // ちょい残響：ディレイ+フィードバックの超ライト版
+  const delay = audioCtx.createDelay(0.4);
+  delay.delayTime.value = 0.14;
+  const fb = audioCtx.createGain(); fb.gain.value = 0.18;
+  delay.connect(fb); fb.connect(delay);
+
+  // ルーティング
+  o.connect(g);
+  g.connect(f);
+  f.connect(delay);
+  f.connect(audioCtx.destination);
+  delay.connect(audioCtx.destination);
+
+  o.start(t0);
+  o.stop(t0 + dur + 0.4);
+}
+
+// かわいい2層音：基本音＋ちょい上の倍音を薄く重ねる
+function cuteTone({freq, t, dur, warm=false}) {
+  playNote({freq, t, dur, type: warm ? 'triangle' : 'sine', gain: 0.18, bend: warm ? -0.01 : 0.012, lpStart: warm?12000:14000, lpEnd: warm?6000:9000});
+  playNote({freq: freq*1.999, t, dur: dur*0.85, type: 'sine', gain: 0.07, bend: 0.006, lpStart: 12000, lpEnd: 9000});
+}
+
+// くまこチャイム本体（パターン2種）
+function kumakoChime(kind){ // 'toBreak'（集中→休憩） / 'toFocus'（休憩→集中）
+  if (!$('soundOn')?.checked) return;
+  ensureAudio(); if (!audioCtx) return;
+
+  // 音階はA=440基準。かわいめにメジャー系。
+  const A4=440, B4=494, C5=523.25, E5=659.25, G5=783.99, A5=880;
+
+  if (kind === 'toBreak') {
+    // 高-中-高 の“ごほうび”アルペジオ（上向き）
+    cuteTone({freq: A5, t: 0.00, dur: .16});
+    cuteTone({freq: E5, t: 0.18, dur: .16});
+    cuteTone({freq: G5, t: 0.34, dur: .22});
+  } else {
+    // やさしい単音で「戻るよ」合図（少し温かいトーン）
+    cuteTone({freq: B4, t: 0.00, dur: .24, warm:true});
+  }
+}
+
+// 旧 playChime をこの関数に置換
+function playChime(kind){
+  kumakoChime(kind);
+}
+
+// バイブ（任意）
+function buzz() {
+  if ($('vibrateOn')?.checked && 'vibrate' in navigator) {
+    navigator.vibrate([60,30,60]);
+  }
+}
+
+
+// ======= 視覚アニメ =======
+function celebrateOnce() {
+  const center = document.querySelector('.timer-center');
+  const ring   = $('ringFg');
+  const kuma   = $('kumako');
+  if (ring)   { ring.classList.add('pop');   setTimeout(()=>ring.classList.remove('pop'), 700); }
+  if (center) { center.classList.add('pulse'); setTimeout(()=>center.classList.remove('pulse'), 600); }
+  if (kuma)   { kuma.classList.add('cele');  setTimeout(()=>kuma.classList.remove('cele'), 600); }
+}
+
 </script>
 </body>
 </html>
