@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Kumako">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 
-<title>学習用ポモドーロタイマー v1.4.2 nao</title>
+<title>学習用ポモドーロタイマー v1.5 ring</title>
 <style>
   /* 🌿 基本テーマ */
   :root { --bg:#0b1220; --card:#111a2b; --text:#e8eefc; --muted:#9ab0d1; --accent:#7aa2ff; --good:#48d597; --warn:#ffb454; --bad:#ff6b6b; }
@@ -23,19 +23,17 @@
   h1{ font-size:20px; margin:0 0 12px; letter-spacing:.03em; display:flex; align-items:center; gap:8px; }
   .phase-badge{ border:1px solid #2a3a66; color:#bcd0ff; background:transparent; border-radius:999px; padding:4px 8px; font-size:13px; }
   .pill{ border:1px solid #223356; color:#cbd7ff; background:transparent; border-radius:999px; padding:4px 8px; font-size:11px; }
-  .display{ font-variant-numeric:tabular-nums; font-size: clamp(48px, 9vw, 96px); text-align:center;
-            border:1px solid #1d2b4a; border-radius:24px; padding:10px 16px; background:#0b1326; }
   .muted{ color:var(--muted); }
+
   .row{ display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
   .field{ background:#0b1326; border:1px solid #1d2b4a; border-radius:12px; padding:10px; }
   .field label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
   .field input{ width:100%; background:#091223; color:var(--text); border:1px solid #223356; border-radius:10px; padding:8px; }
+
   .controls{ margin-top:12px; position:relative; z-index:2; }
   button{ border-radius:14px; padding:10px 16px; margin:4px; cursor:pointer; font-size:14px; transition:.15s; border:1px solid #21345d; background:#142040; color:var(--text); }
   button:hover{ filter:brightness(1.06); }
   .ghost{ background:transparent }
-  .success{ background:var(--good); color:#062819; border-color:#2b8c68 }
-  .warn{ background:#ffe9c4; color:#4a3612; border-color:#e9c07a }
 
   /* 🍃 Minty Focus テーマ */
   body[data-theme="mint"]{
@@ -43,7 +41,6 @@
     background:linear-gradient(180deg,#f6fff9,#ffffff 60%,#ffffff);
   }
   body[data-theme="mint"] .card{ border-color:#e6f6ee; box-shadow:0 16px 32px rgba(105,195,161,.08); }
-  body[data-theme="mint"] .display{ background:#f9fffb; border-color:#e6f6ee; color:#24342d; }
   body[data-theme="mint"] .phase-badge{ border-color:#bfead6; color:#2f3e37; background:#eefaf4; }
   body[data-theme="mint"] .pill{ border-color:#d6f0e1; color:#2f3e37; background:#f6fff9; }
   body[data-theme="mint"] .field{ background:#fff; border-color:#d6f0e1; }
@@ -53,7 +50,7 @@
   body[data-theme="mint"] button:hover{ filter:brightness(1.03); box-shadow:0 3px 0 #69c3a1, 0 10px 22px rgba(105,195,161,.22); }
   body[data-theme="mint"] .muted{ color:#567a6a; }
 
-  /* 🧸 くまこ＋吹き出し（タイマー下） */
+  /* 🧸 くまこ＋吹き出し */
   .mascot { display:flex; flex-direction:column; align-items:center; gap:8px; margin:12px 0 8px; position:relative; z-index:1; }
   #kumako { width:110px; height:auto; opacity:.98; pointer-events:none; }
   .running #kumako { animation:bob 2s ease-in-out infinite; transform-origin:50% 100%; }
@@ -65,42 +62,27 @@
   .bubble::before{ content:""; position:absolute; top:-7px; left:calc(50% - 7px);
                    border-width:0 7px 7px 7px; border-style:solid; border-color:transparent transparent #eefaf4 transparent; }
 
-  /* 進捗バー */
-  #bar{height:8px;border-radius:8px;background:#e6f6ee;overflow:hidden;margin:6px 2px 0}
-  #barFill{height:100%;width:0%;background:#69c3a1;transition:width .2s ease}
+  /* 円形タイマー */
+  .timer-wrap{
+    width:min(56vw,320px); height:min(56vw,320px);
+    margin:12px auto 6px; position:relative;
+  }
+  .ring{ width:100%; height:100%; transform:rotate(-90deg); }
+  .ring-bg{ fill:none; stroke:#e6f6ee; stroke-width:10; opacity:.7; }
+  .ring-fg{ fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round;
+            stroke-dasharray: 339.292; stroke-dashoffset: 339.292; transition: stroke-dashoffset .2s ease; }
+  .timer-center{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .time{ font-variant-numeric:tabular-nums; font-size: clamp(40px, 8vw, 72px); font-weight:600; color:var(--text); letter-spacing:.02em; }
+  .phase-mini{ font-size:12px; color:var(--muted); margin-top:4px; }
 
-  /* 休憩バッジの色 */
+  /* 休憩バッジ＆リング色 */
   .breaking .phase-badge{ background:#fff8ec; border-color:#ffd9a8; color:#573d17; }
+  .breaking .ring-fg{ stroke: var(--warn); }
+  @media (prefers-reduced-motion: reduce){ .ring-fg{ transition:none } }
 
   .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
-  /* 円形タイマー */
-.timer-wrap{
-  width:min(56vw,320px); height:min(56vw,320px);
-  margin:12px auto 6px; position:relative;
-}
-.ring{ width:100%; height:100%; transform:rotate(-90deg); }
-.ring-bg{ fill:none; stroke:#e6f6ee; stroke-width:10; opacity:.7; }
-.ring-fg{ fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round; stroke-dasharray: 339.292; stroke-dashoffset: 339.292; transition: stroke-dashoffset .2s ease; }
-.timer-center{
-  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-}
-.timer-center .time{ font-variant-numeric:tabular-nums; font-size: clamp(40px, 8vw, 72px); font-weight:600; color:var(--text); }
-.timer-center .phase{ font-size:12px; color:var(--muted); margin-top:4px; }
-
-/* 切替トグルの並び */
-.mode-toggle{ font-size:12px; display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
-
-/* ダーク時の背景円を少し濃く */
-body:not([data-theme="mint"]) .ring-bg{ stroke:#1d2b4a; opacity:.9; }
-
-/* 休憩中は色をウォームに */
-.breaking .ring-fg{ stroke: var(--warn); }
-
-/* 視覚効果をひかえめにしたい人向け */
-@media (prefers-reduced-motion: reduce){
-  .ring-fg{ transition:none }
-}
-
 </style>
 </head>
 <body data-theme="mint">
@@ -109,32 +91,22 @@ body:not([data-theme="mint"]) .ring-bg{ stroke:#1d2b4a; opacity:.9; }
     <h1>
       学習用ポモドーロタイマー
       <span class="phase-badge" id="phaseBadge">フォーカス</span>
-      <span class="pill">v1.4.2 nao</span>
+      <span class="pill">v1.5 ring</span>
     </h1>
 
     <!-- タイマー表示（円形リング） -->
-<div class="timer-wrap">
-  <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
-    <!-- 背景円 -->
-    <circle class="ring-bg" cx="60" cy="60" r="54" />
-    <!-- 進捗円（strokeDashoffset をJSで更新） -->
-    <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="54" />
-  </svg>
-  <div class="timer-center">
-    <div class="time" id="display">40:00</div>
-    <div class="phase" id="phaseMini">フォーカス</div>
-  </div>
-</div>
+    <div class="timer-wrap">
+      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="ring-bg" cx="60" cy="60" r="54" />
+        <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="54" />
+      </svg>
+      <div class="timer-center">
+        <div class="time" id="display">40:00</div>
+        <div class="phase-mini" id="phaseMini">フォーカス</div>
+      </div>
+    </div>
 
-<!-- 表示モード（任意：円形/バー切替） -->
-<label class="muted mode-toggle">
-  <input type="checkbox" id="useCircular" checked>
-  円形プログレスを使う
-</label>
-    <!-- 進捗バー（タイマー直下） -->
-    <div id="bar"><div id="barFill"></div></div>
-
-    <!-- くまこ＋吹き出し（タイマーの下に中央） -->
+    <!-- くまこ＋吹き出し -->
     <div class="mascot">
       <img id="kumako" src="kumako.png" alt="くまこ">
       <div class="bubble" id="bubble">準備OK？ 最初からいこう！</div>
@@ -145,7 +117,7 @@ body:not([data-theme="mint"]) .ring-bg{ stroke:#1d2b4a; opacity:.9; }
       <button id="startBtn" type="button">スタート</button>
       <button id="pauseBtn" type="button">一時停止</button>
       <button id="resetBtn" type="button">リセット</button>
-      <button id="skipBtn" type="button" class="ghost">→ 次へ</button>
+      <button id="skipBtn"  type="button" class="ghost">→ 次へ</button>
     </div>
 
     <!-- 自動進行トグル（デフォルトOFF） -->
@@ -188,24 +160,26 @@ body:not([data-theme="mint"]) .ring-bg{ stroke:#1d2b4a; opacity:.9; }
 </div>
 
 <script>
- // 円形リング進捗用
-const R = 54;
-const CIRC = 2 * Math.PI * R; // 339.292...
-const ringEl = document.getElementById('ringFg');
-const phaseMini = document.getElementById('phaseMini');
-
-  // ========== 状態 ==========
+  // ========== 参照 ==========
   const $ = id => document.getElementById(id);
   const app = $('app');
+
+  // 円形リング用
+  const R = 54;
+  const CIRC = 2 * Math.PI * R; // 339.292...
+  const ringEl   = $('ringFg');
+  const phaseMini= $('phaseMini');
+
+  // ========== 状態 ==========
   const state = {
     phase: 'focus',           // 'focus' | 'short' | 'long'
     remaining: 40*60,         // 秒
-    startTotal: 40*60,        // フェーズ総秒数（バー用）
+    startTotal: 40*60,        // フェーズ総秒数（リング用）
     targetTs: null,           // 目標時刻(ms)
     timerId: null,
-    setIndex: 1,              // 何セット目の終了か（focus完了で+1）
+    setIndex: 1,              // focus完了で+1
     running: false,
-    fiveMinFlag: false        // 残り5分メッセージ一度だけ
+    fiveMinFlag: false
   };
 
   // ========== ユーティリティ ==========
@@ -248,50 +222,44 @@ const phaseMini = document.getElementById('phaseMini');
   function setPhase(phase){
     state.phase = phase;
     state.remaining = minutesFor(phase)*60;
-    state.startTotal = state.remaining;           // バー初期化
+    state.startTotal = state.remaining;
     state.fiveMinFlag = false;
+
     $('display').textContent = fmt(state.remaining);
     $('phaseBadge').textContent = labelFor(phase);
-    $('barFill').style.width = '0%';
+    if (phaseMini) phaseMini.textContent = labelFor(phase);
+
+    // リング初期化（0%表示＝未進捗）
+    if (ringEl) ringEl.style.strokeDashoffset = String(CIRC);
+
+    // 休憩時の見た目
     app.classList.toggle('breaking', phase!=='focus');
+
     if(phase==='focus') say('準備OK？ 集中モードいってみよう！');
     if(phase==='short') say('お水のもう〜 ちょっと休憩☕');
     if(phase==='long')  say('よくがんばったね！ しっかり長めに休もう😊');
-      if (phaseMini) phaseMini.textContent = labelFor(phase);
-      const colorBy = {
-  focus: 'var(--accent)',
-  short: 'var(--warn)',
-  long:  'var(--good)'
-};
-if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
-
-      
-  // 円形をリセット（0%から）
-  if (ringEl) ringEl.style.strokeDashoffset = String(CIRC);
-
   }
 
   // ========== タイマー操作 ==========
-  function updateBar(){
-  if(state.startTotal > 0 && ringEl){
-    const progress = 1 - (state.remaining / state.startTotal); // 0→1
-    const clamped = Math.min(1, Math.max(0, progress));
-    ringEl.style.strokeDashoffset = String(CIRC * (1 - clamped));
+  function updateRing(){
+    if(state.startTotal>0 && ringEl){
+      const progress = 1 - (state.remaining / state.startTotal); // 0→1
+      const clamped = Math.min(1, Math.max(0, progress));
+      ringEl.style.strokeDashoffset = String(CIRC * (1 - clamped));
+    }
   }
-}
-
   function tick(){
     const now = Date.now();
     state.remaining = Math.ceil((state.targetTs - now)/1000);
     $('display').textContent = fmt(state.remaining);
-    updateBar();
+    updateRing();
 
     if(state.phase==='focus' && !state.fiveMinFlag && state.remaining === 5*60){
       say('あと5分！ そのまま駆け抜けよう🔥'); state.fiveMinFlag = true;
     }
     if(state.remaining <= 0){
       onPhaseComplete();
-      return; // ★ 古いtickを終了
+      return; // 古いtick終了
     }
   }
   function start(){
@@ -303,7 +271,6 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
     say(state.phase==='focus' ? 'いってらっしゃい、集中タイム！' : 'リラックス〜深呼吸🫧');
     saveSettings();
   }
-  // 走行中のtickを静かに止める（バブル文言は変えない）
   function stopTick() {
     if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
     state.running = false;
@@ -319,12 +286,10 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
     state.setIndex = 1;
     setPhase('focus');
   }
-
   function onPhaseComplete(force=false){
-    const wasRunning = state.running; // 直前に走っていたか記憶
-    stopTick();                       // ★古いtargetTsを必ず停止
+    const wasRunning = state.running;
+    stopTick();
 
-    // 次フェーズへ
     if(state.phase==='focus'){
       const setsToLong = +$('setsToLong').value || 4;
       const next = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
@@ -334,7 +299,6 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
       setPhase('focus');
     }
 
-    // 自動進行の判断（デフォルトOFF）
     const auto = $('autoContinue')?.checked ?? false;
     if (force || (wasRunning && auto)) {
       start();
@@ -343,8 +307,6 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
       say('次のフェーズの準備ができたら、スタートしてね🧸');
     }
   }
-
-  // どのフェーズでも必ず即次へ（force=true）
   function skip(){ onPhaseComplete(true); }
 
   // ========== 入出力 ==========
@@ -354,8 +316,7 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
       const cur=JSON.parse(localStorage.getItem(key)||'{}');
       cur.focusMin=+$('focusMin').value; cur.shortMin=+$('shortMin').value;
       cur.longMin=+$('longMin').value;   cur.setsToLong=+$('setsToLong').value;
-      cur.autoNext = !!$('autoContinue')?.checked; // ★ 追加保存
-      cur.useCircular = !!document.getElementById('useCircular')?.checked;
+      cur.autoNext = !!$('autoContinue')?.checked;
       localStorage.setItem(key, JSON.stringify(cur));
     }catch(e){}
   }
@@ -366,9 +327,8 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
       if(s.shortMin) $('shortMin').value = s.shortMin;
       if(s.longMin)  $('longMin').value  = s.longMin;
       if(s.setsToLong) $('setsToLong').value = s.setsToLong;
-      if('autoNext' in s && $('autoContinue')) $('autoContinue').checked = !!s.autoNext; // ★ 復元
+      if('autoNext' in s && $('autoContinue')) $('autoContinue').checked = !!s.autoNext;
     }catch(e){}
-    if('useCircular' in s && $('useCircular')) $('useCircular').checked = !!s.useCircular;
   })();
 
   // ========== イベント ==========
@@ -376,15 +336,15 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
   $('pauseBtn').addEventListener('click', pause);
   $('resetBtn').addEventListener('click', reset);
   $('skipBtn').addEventListener('click', skip);
-  $('useCircular')?.addEventListener('change', saveSettings);
   $('autoContinue')?.addEventListener('change', saveSettings);
   ['focusMin','shortMin','longMin','setsToLong'].forEach(id=>{
     $(id).addEventListener('change', ()=>{
       saveSettings();
       if(!state.running){
         state.remaining = minutesFor(state.phase)*60;
-        state.startTotal = state.remaining; $('barFill').style.width='0%';
+        state.startTotal = state.remaining;
         $('display').textContent = fmt(state.remaining);
+        if (ringEl) ringEl.style.strokeDashoffset = String(CIRC);
       }
     });
   });
@@ -395,10 +355,10 @@ if (ringEl) ringEl.style.stroke = colorBy[phase] || 'var(--accent)';
   });
 
   // 初期化
-  setPhase('focus'); // ナオ仕様（40分）で表示
+  setPhase('focus');
 </script>
 
-<div class="footer">Pomodoro <strong>v1.4.2 nao (manual default)</strong></div>
+<div class="footer">Pomodoro <strong>v1.5 ring (manual default)</strong></div>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
