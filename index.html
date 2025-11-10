@@ -113,6 +113,14 @@
   .ring-fg.pop { filter:none; }
 }
 
+/* 今日の実績 */
+.stats{
+  margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;
+}
+.stat{ background:#ffffff10; border:1px solid #e6f6ee30; border-radius:12px; padding:10px 12px; }
+body[data-theme="mint"] .stat{ background:#f9fffb; border-color:#e6f6ee; }
+.stat .label{ font-size:12px; color:var(--muted); margin-bottom:4px; }
+.stat .value{ font-size:20px; font-weight:600; color:var(--text); }
 
 </style>
 </head>
@@ -150,6 +158,18 @@
       <button id="resetBtn" type="button">リセット</button>
       <button id="skipBtn"  type="button" class="ghost">→ 次へ</button>
     </div>
+
+<!-- 今日の実績 -->
+<div class="stats">
+  <div class="stat">
+    <div class="label">今日のフォーカス</div>
+    <div class="value" id="todayFocus">00:00</div>
+  </div>
+  <div class="stat">
+    <div class="label">今日のセット</div>
+    <div class="value" id="todaySets">0</div>
+  </div>
+</div>
 
     <!-- 自動進行トグル（デフォルトOFF） -->
     <label class="muted" style="font-size:12px;display:inline-flex;align-items:center;gap:6px;margin-left:8px">
@@ -217,6 +237,7 @@
     setIndex: 1,              // focus完了で+1
     running: false,
     fiveMinFlag: false
+    focusStartTs: null,   // フォーカス走行スタート時刻(ms)
   };
 
   // ========== ユーティリティ ==========
@@ -226,6 +247,52 @@
     return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
   };
   const say = (t)=> $('bubble').textContent = t;
+
+  // 現在フォーカス走行中の経過を日次に加算してリセット
+function flushFocusProgress(){
+  if (state.phase !== 'focus') { state.focusStartTs = null; return; }
+  if (!state.focusStartTs) return;
+  const now = Date.now();
+  const sec = Math.max(0, Math.floor((now - state.focusStartTs)/1000));
+  if (sec > 0) addFocusSec(sec);
+  state.focusStartTs = now; // 次の区間の起点に更新
+}
+  
+// ==== 日次集計（キーはローカル日付） ====
+const DAILY_KEY = 'pomodoro_daily_v1';
+const todayKey = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const dd= String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`; // 例: 2025-11-10
+};
+const getStore = () => JSON.parse(localStorage.getItem(DAILY_KEY)||'{}');
+const saveStore = (obj) => localStorage.setItem(DAILY_KEY, JSON.stringify(obj));
+function getDaily(){
+  const store = getStore(); const k = todayKey();
+  return store[k] || { focusSec:0, sets:0 };
+}
+function setDaily(rec){
+  const store = getStore(); const k = todayKey();
+  store[k] = rec; saveStore(store);
+}
+function addFocusSec(sec){
+  if (!sec) return;
+  const rec = getDaily(); rec.focusSec += Math.max(0, Math.floor(sec));
+  setDaily(rec); renderDaily();
+}
+function incSet(){
+  const rec = getDaily(); rec.sets += 1; setDaily(rec); renderDaily();
+}
+function renderDaily(){
+  const rec = getDaily();
+  // 既存の fmt(s) は「秒→MM:SS」なのでそのまま使える
+  const tf = document.getElementById('todayFocus');
+  const ts = document.getElementById('todaySets');
+  if (tf) tf.textContent = fmt(rec.focusSec);
+  if (ts) ts.textContent = String(rec.sets);
+}
 
   // ========== テーマ保存 ==========
   (function themeInit(){
@@ -300,51 +367,71 @@
     }
   }
   function start(){
-    ensureAudio(); // ←追加：iOSでの初回再生許可
-    if(state.running) return;
-    state.targetTs = Date.now() + state.remaining*1000;
-    state.timerId = setInterval(tick, 200);
-    state.running = true;
-    app.classList.add('running');
-    say(state.phase==='focus' ? 'いってらっしゃい、集中タイム！' : 'リラックス〜深呼吸🫧');
-    saveSettings();
+  ensureAudio(); // ←音を使っているなら残す
+  if(state.running) return;
+  state.targetTs = Date.now() + state.remaining*1000;
+  state.timerId = setInterval(tick, 200);
+  state.running = true;
+  app.classList.add('running');
+
+  // ★フォーカス走行の起点を記録
+  if (state.phase === 'focus' && !state.focusStartTs) {
+    state.focusStartTs = Date.now();
   }
-  function stopTick() {
-    if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
-    state.running = false;
-    app.classList.remove('running');
-  }
-  function pause(){
-    if(!state.running) return;
-    stopTick();
-    say('一時停止〜 整えて再開しよ！');
-  }
-  function reset(){
-    stopTick();
-    state.setIndex = 1;
-    setPhase('focus');
-  }
+
+  say(state.phase==='focus' ? 'いってらっしゃい、集中タイム！' : 'リラックス〜深呼吸🫧');
+  saveSettings();
+}
+
+function pause(){
+  if(!state.running) return;
+  // ★今までのフォーカス経過を日次に反映
+  flushFocusProgress();
+  stopTick();
+  say('一時停止〜 整えて再開しよ！');
+}
+
+function reset(){
+  // ★フォーカス中なら一旦確定
+  flushFocusProgress();
+  stopTick();
+  state.setIndex = 1;
+  setPhase('focus');
+  renderDaily(); // 念のため再表示
+}
+
 function onPhaseComplete(force=false){
   const wasRunning = state.running;
   stopTick();
+
+  // ★フォーカスを離れる直前までの実測を確定
+  if (state.phase === 'focus') flushFocusProgress();
 
   // 次フェーズ決定
   let nextPhase;
   if(state.phase==='focus'){
     const setsToLong = +$('setsToLong').value || 4;
     nextPhase = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
-    state.setIndex += 1;
+    // ★自然完了（force=false）のときだけセット加算
+    if (!force) { state.setIndex += 1; incSet(); }
+    else { state.setIndex += 1; } // 進捗は進めるがセットは増やさない方針
   } else {
     nextPhase = 'focus';
   }
+
   setPhase(nextPhase);
 
-  // 🔔 フェーズ切替時のサウンド＆アニメ
+  // ★フォーカスに入った直後に走らせるなら起点セット
+  if (nextPhase === 'focus' && wasRunning) {
+    state.focusStartTs = Date.now();
+  }
+
+  //（ここは既存のまま）チャイム・バイブ・アニメ
   playChime(nextPhase === 'focus' ? 'toFocus' : 'toBreak');
   buzz();
   celebrateOnce();
 
-  // 自動スタート判定
+  // 自動進行判定
   const auto = $('autoContinue')?.checked ?? false;
   if (force || (wasRunning && auto)) {
     start();
@@ -407,6 +494,8 @@ function onPhaseComplete(force=false){
 
   // 初期化
   setPhase('focus');
+  renderDaily(); // ← これを追加
+
 </script>
 
 <div class="footer">Pomodoro <strong>v1.5 ring (manual default)</strong></div>
