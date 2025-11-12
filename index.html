@@ -15,7 +15,7 @@
 <!-- Favicon -->
 <link rel="icon" type="image/png" href="favicon.png">
 
-<title>学習用ポモドーロタイマー v1.6 ring</title>
+<title>学習用ポモドーロタイマー v1.7 ring</title>
 
 <style>
   /* 🌿 基本テーマ */
@@ -89,26 +89,13 @@
   .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
 
   /* === 終了アニメ === */
-  @keyframes ringPop {
-    0% { stroke-width:10; filter:none; }
-    45% { stroke-width:14; filter:drop-shadow(0 0 10px rgba(105,195,161,.35)); }
-    100% { stroke-width:10; filter:none; }
-  }
-  @keyframes centerPulse {
-    0%{ transform:scale(1); opacity:1; }
-    50%{ transform:scale(1.06); opacity:1; }
-    100%{ transform:scale(1); opacity:1; }
-  }
-  @keyframes kumaBounce {
-    0%,100%{ transform:translateY(0) }
-    40%{ transform:translateY(-6px) }
-  }
+  @keyframes ringPop { 0% { stroke-width:10; filter:none; } 45% { stroke-width:14; filter:drop-shadow(0 0 10px rgba(105,195,161,.35)); } 100% { stroke-width:10; filter:none; } }
+  @keyframes centerPulse { 0%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.06); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
+  @keyframes kumaBounce { 0%,100%{ transform:translateY(0) } 40%{ transform:translateY(-6px) } }
   #kumako.cele { animation: kumaBounce .6s ease-out 1 !important; }
   .ring-fg.pop { animation: ringPop .7s ease-out 1; }
   .timer-center.pulse { animation: centerPulse .6s ease-out 1; }
-  @supports not (filter: drop-shadow(0 0 10px #000)) {
-    .ring-fg.pop { filter:none; }
-  }
+  @supports not (filter: drop-shadow(0 0 10px #000)) { .ring-fg.pop { filter:none; } }
 
   /* 今日の実績 */
   .stats{ margin-top:10px; display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
@@ -124,7 +111,7 @@
     <h1>
       学習用ポモドーロタイマー
       <span class="phase-badge" id="phaseBadge">フォーカス</span>
-      <span class="pill">v1.6 ring</span>
+      <span class="pill">v1.7 ring</span>
     </h1>
 
     <!-- タイマー表示（円形リング） -->
@@ -163,6 +150,12 @@
         <div class="label">今日のセット</div>
         <div class="value" id="todaySets">0</div>
       </div>
+    </div>
+
+    <!-- エクスポート -->
+    <div style="margin-top:6px">
+      <button id="exportCsvBtn" type="button" class="ghost">📤 日次ログをCSVで保存</button>
+      <button id="exportJsonBtn" type="button" class="ghost" style="margin-left:6px">{} JSON</button>
     </div>
 
     <!-- 自動進行トグル（デフォルトOFF） -->
@@ -206,7 +199,7 @@
       </select>
     </div>
 
-    <p class="muted" style="font-size:12px;margin-top:12px">設定は自動保存されます。タブを閉じても続きます（簡易）。</p>
+    <p class="muted" style="font-size:12px;margin-top:12px">設定は自動保存されます。タブを閉じても続きます（簡易）。 1日の区切りは午前4時です。</p>
   </div>
 </div>
 
@@ -242,32 +235,34 @@
   };
   const say = (t)=> $('bubble').textContent = t;
 
-  // ==== 日次集計（キーはローカル日付） ====
-  const DAILY_KEY = 'pomodoro_daily_v1';
-  const todayKey = () => {
-    const d = new Date();
+  // ---- 4時区切りの“業務日”キー（ローカル） ----
+  const bizDayKey = (ts = Date.now()) => {
+    const d = new Date(ts - 4 * 60 * 60 * 1000); // 4h引いて日付キー化
     const y = d.getFullYear();
     const m = String(d.getMonth()+1).padStart(2,'0');
     const dd= String(d.getDate()).padStart(2,'0');
-    return `${y}-${m}-${dd}`; // 例: 2025-11-10
+    return `${y}-${m}-${dd}`;
   };
+
+  // ==== 日次集計（localStorage） ====
+  const DAILY_KEY = 'pomodoro_daily_v1';
   const getStore = () => JSON.parse(localStorage.getItem(DAILY_KEY)||'{}');
   const saveStore = (obj) => localStorage.setItem(DAILY_KEY, JSON.stringify(obj));
-  function getDaily(){
-    const store = getStore(); const k = todayKey();
+  function getDaily(ts = Date.now()){
+    const store = getStore(); const k = bizDayKey(ts);
     return store[k] || { focusSec:0, sets:0 };
   }
-  function setDaily(rec){
-    const store = getStore(); const k = todayKey();
+  function setDaily(rec, ts = Date.now()){
+    const store = getStore(); const k = bizDayKey(ts);
     store[k] = rec; saveStore(store);
   }
-  function addFocusSec(sec){
+  function addFocusSec(sec, ts = Date.now()){
     if (!sec) return;
-    const rec = getDaily(); rec.focusSec += Math.max(0, Math.floor(sec));
-    setDaily(rec); renderDaily();
+    const rec = getDaily(ts); rec.focusSec += Math.max(0, Math.floor(sec));
+    setDaily(rec, ts); renderDaily();
   }
-  function incSet(){
-    const rec = getDaily(); rec.sets += 1; setDaily(rec); renderDaily();
+  function incSet(ts = Date.now()){
+    const rec = getDaily(ts); rec.sets += 1; setDaily(rec, ts); renderDaily();
   }
   function renderDaily(){
     const rec = getDaily();
@@ -277,13 +272,28 @@
     if (ts) ts.textContent = String(rec.sets);
   }
 
-  // 現在フォーカス走行中の経過を当日合計に反映して、起点はクリア
-function flushFocusProgress() {
-  if (state.phase !== 'focus' || !state.focusStartTs) return;
-  const sec = Math.max(0, Math.floor((Date.now() - state.focusStartTs) / 1000));
-  if (sec) addFocusSec(sec);
-  state.focusStartTs = null;   // ← ここを必ず null に（以前は now にしていた）
-}
+  // startTs〜endTs のフォーカスを、午前4時境界で分割加算
+  function addFocusRange(startTs, endTs){
+    if (endTs <= startTs) return;
+    // startTs が属する業務日の次の4:00境界
+    const d = new Date(startTs - 4*3600*1000);
+    d.setHours(0,0,0,0);
+    const boundary = d.getTime() + 24*3600*1000 + 4*3600*1000; // 次の4:00
+    if (endTs <= boundary){
+      addFocusSec((endTs - startTs)/1000, startTs);
+    } else {
+      addFocusSec((boundary - startTs)/1000, startTs);
+      addFocusRange(boundary, endTs); // 残りを次の日へ
+    }
+  }
+
+  // 現在フォーカス走行中の実績を確定して、起点をクリア
+  function flushFocusProgress() {
+    if (state.phase !== 'focus' || !state.focusStartTs) return;
+    const now = Date.now();
+    addFocusRange(state.focusStartTs, now);
+    state.focusStartTs = null; // フェーズ離脱時に必ずクリア
+  }
 
   // ========== テーマ保存 ==========
   (function themeInit(){
@@ -372,7 +382,7 @@ function flushFocusProgress() {
     state.running = true;
     app.classList.add('running');
 
-    // ★フォーカス走行の起点を記録
+    // フォーカス走行の起点を記録
     if (state.phase === 'focus' && !state.focusStartTs) {
       state.focusStartTs = Date.now();
     }
@@ -383,35 +393,45 @@ function flushFocusProgress() {
 
   function pause(){
     if(!state.running) return;
-    // ★今までのフォーカス経過を日次に反映
-    flushFocusProgress();
+    flushFocusProgress(); // 実績を反映
     stopTick();
     say('一時停止〜 整えて再開しよ！');
   }
 
   function reset(){
-    // ★フォーカス中なら一旦確定
     flushFocusProgress();
     stopTick();
     state.setIndex = 1;
     setPhase('focus');
-    renderDaily(); // 念のため再表示
+    renderDaily();
   }
 
   function onPhaseComplete(force = false){
-  const wasRunning = state.running;
-  stopTick();
+    const wasRunning = state.running;
+    stopTick();
 
-  if (state.phase === 'focus') {
-    flushFocusProgress();      // 実績を確定
-    state.focusStartTs = null; // ← フェーズ離脱時は必ずクリア
-  }
+    if (state.phase === 'focus') {
+      flushFocusProgress();
+      state.focusStartTs = null;
+    }
 
-  // …このあと nextPhase を決めて setPhase(nextPhase)
-  // フォーカスに入って自動再開する場合だけ、新たな起点をセット
-  if (nextPhase === 'focus' && wasRunning) {
-    state.focusStartTs = Date.now();
-  }
+    // 次フェーズ決定
+    let nextPhase;
+    if(state.phase==='focus'){
+      const setsToLong = +$('setsToLong').value || 4;
+      nextPhase = (state.setIndex % setsToLong === 0) ? 'long' : 'short';
+      if (!force) { state.setIndex += 1; incSet(Date.now()); }
+      else { state.setIndex += 1; }
+    } else {
+      nextPhase = 'focus';
+    }
+
+    setPhase(nextPhase);
+
+    // フォーカスに入った直後に走らせるなら起点セット
+    if (nextPhase === 'focus' && wasRunning) {
+      state.focusStartTs = Date.now();
+    }
 
     // チャイム・バイブ・アニメ
     playChime(nextPhase === 'focus' ? 'toFocus' : 'toBreak');
@@ -456,6 +476,36 @@ function flushFocusProgress() {
     }catch(e){}
   })();
 
+  // エクスポート
+  function exportCsv(){
+    const store = getStore();
+    const rows = [['date','focusSec','focusHH:MM','sets']];
+    const keys = Object.keys(store).sort();
+    for (const k of keys){
+      const {focusSec=0, sets=0} = store[k] || {};
+      const hh = String(Math.floor(focusSec/3600)).padStart(2,'0');
+      const mm = String(Math.floor((focusSec%3600)/60)).padStart(2,'0');
+      rows.push([k, String(focusSec), `${hh}:${mm}`, String(sets)]);
+    }
+    const csv = rows.map(r => r.map(v => /[",\n]/.test(v)? `"${v.replace(/"/g,'""')}"`: v).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pomodoro_daily_${bizDayKey()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function exportJson(){
+    const blob = new Blob([JSON.stringify(getStore(), null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pomodoro_daily_${bizDayKey()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  $('exportCsvBtn')?.addEventListener('click', exportCsv);
+  $('exportJsonBtn')?.addEventListener('click', exportJson);
+
   // ========== イベント ==========
   $('startBtn').addEventListener('click', start);
   $('pauseBtn').addEventListener('click', pause);
@@ -484,7 +534,7 @@ function flushFocusProgress() {
   renderDaily();
 </script>
 
-<div class="footer">Pomodoro <strong>v1.6 ring (manual default)</strong></div>
+<div class="footer">Pomodoro <strong>v1.7 ring (manual default)</strong></div>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -557,15 +607,15 @@ function kumakoChime(kind){ // 'toBreak'（集中→休憩） / 'toFocus'（休�
   if (!$('soundOn')?.checked) return;
   ensureAudio(); if (!audioCtx) return;
 
-  const A4=440, B4=494, C5=523.25, D5=587.33, E5=659.25, G5=783.99, A5=880;
+  const A4=440, D5=587.33, E5=659.25, G5=783.99, A5=880;
 
   if (kind === 'toFocus') {
-    // 💥 F1エントリー風：低→中→高、うねる感じで気合！
+    // 💥 F1エントリー風
     cuteTone({freq: A4, t: 0.00, dur: .22, warm:true});
     cuteTone({freq: D5, t: 0.18, dur: .22, warm:false});
     cuteTone({freq: G5, t: 0.36, dur: .30, warm:false});
   } else {
-    // ✨ 上昇チャイム：やわらかく高音へ抜けていく
+    // ✨ 上昇チャイム
     cuteTone({freq: E5, t: 0.00, dur: .18});
     cuteTone({freq: G5, t: 0.18, dur: .20});
     cuteTone({freq: A5, t: 0.36, dur: .25});
