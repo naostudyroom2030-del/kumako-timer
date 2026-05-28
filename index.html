@@ -89,11 +89,23 @@
   .footer{ text-align:center; font-size:11px; color:#7d90b6; opacity:.9; margin:14px 0; }
 
   /* === 終了アニメ === */
-  @keyframes ringPop { 0% { stroke-width:10; filter:none; } 45% { stroke-width:14; filter:drop-shadow(0 0 10px rgba(105,195,161,.35)); } 100% { stroke-width:10; filter:none; } }
+  @keyframes ringPop { 
+  0%   { stroke-width:10; }
+  10%  { stroke-width:15; }
+  20%  { stroke-width:10; }
+
+  35%  { stroke-width:15; }
+  45%  { stroke-width:10; }
+
+  60%  { stroke-width:15; }
+  70%  { stroke-width:10; }
+
+  100% { stroke-width:10; }
+}
   @keyframes centerPulse { 0%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.06); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
   @keyframes kumaBounce { 0%,100%{ transform:translateY(0) } 40%{ transform:translateY(-6px) } }
   #kumako.cele { animation: kumaBounce .6s ease-out 1 !important; }
-  .ring-fg.pop { animation: ringPop .7s ease-out 1; }
+  .ring-fg.pop { animation: ringPop 1.4s ease-out 1; }
   .timer-center.pulse { animation: centerPulse .6s ease-out 1; }
   @supports not (filter: drop-shadow(0 0 10px #000)) { .ring-fg.pop { filter:none; } }
 
