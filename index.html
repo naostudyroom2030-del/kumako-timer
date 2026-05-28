@@ -15,7 +15,7 @@
 <!-- Favicon -->
 <link rel="icon" type="image/png" href="favicon.png">
 
-<title>学習用ポモドーロタイマー v1.7 ring</title>
+<title>学習用ポモドーロタイマー v1.7.1 ring</title>
 
 <style>
   /* 🌿 基本テーマ */
@@ -648,9 +648,26 @@ function celebrateOnce() {
   const ring   = document.getElementById('ringFg');
   const kuma   = document.getElementById('kumako');
 
-  if (ring)   { ring.classList.add('pop');   setTimeout(()=>ring.classList.remove('pop'), 750); }
-  if (center) { center.classList.add('pulse'); setTimeout(()=>center.classList.remove('pulse'), 650); }
-  if (kuma)   { kuma.classList.add('cele');   setTimeout(()=>kuma.classList.remove('cele'), 650); }
+  if (ring) {
+    ring.classList.remove('pop');
+    void ring.offsetWidth; // アニメを毎回確実に再発火させる
+    ring.classList.add('pop');
+    setTimeout(() => ring.classList.remove('pop'), 1500);
+  }
+
+  if (center) {
+    center.classList.remove('pulse');
+    void center.offsetWidth;
+    center.classList.add('pulse');
+    setTimeout(() => center.classList.remove('pulse'), 650);
+  }
+
+  if (kuma) {
+    kuma.classList.remove('cele');
+    void kuma.offsetWidth;
+    kuma.classList.add('cele');
+    setTimeout(() => kuma.classList.remove('cele'), 650);
+  }
 }
 </script>
 </body>
